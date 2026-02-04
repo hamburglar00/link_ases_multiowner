@@ -59,11 +59,6 @@
 
   <script>
     /***************************************************
-     * CONFIG GENERAL
-     ***************************************************/
-    const TELEGRAM_URL = ""; // vacío => “No disponible”
-
-    /***************************************************
      * JUGAR AHORA – REDIRECCIÓN ALEATORIA SIN RECARGAR
      ***************************************************/
     const JUGAR_AHORA_URLS = [
@@ -80,6 +75,7 @@
 
     /***************************************************
      * VARIANTES DE DISEÑO
+     * (Telegram ahora es dinámico: href se setea por JS)
      ***************************************************/
     const DESIGNS = {
       whatsapp: {
@@ -99,7 +95,13 @@
                 <img src="imagenes/rocket_1f680.png" alt="" class="wa-ic"> JUGAR AHORA
               </a>
 
-              <a href="${TELEGRAM_URL || '#'}" target="_blank" rel="noopener" id="btnTelegram" class="gn-btn gn-btn-telegram" style="position:relative;">
+              <a href="#"
+                 target="_blank"
+                 rel="noopener"
+                 id="btnTelegram"
+                 data-telegram="1"
+                 class="gn-btn gn-btn-telegram"
+                 style="position:relative;">
                 <img src="imagenes/telegram.png" alt="" class="wa-ic"> TELEGRAM
                 <span style="
                   position:absolute;
@@ -146,6 +148,73 @@
         window.open(randomUrl, "_blank", "noopener");
       });
     }
+
+    /***************************************************
+     * TELEGRAM DINÁMICO POR AGENCY (via API)
+     ***************************************************/
+    let TELEGRAM_URL = null;
+
+    async function loadTelegramUrlForAgency(agencyId) {
+      if (!agencyId) return null;
+
+      // cache local por agency (10 min)
+      const CACHE_KEY = `telegram_url_cache:v1:${agencyId}`;
+      const CACHE_TTL = 10 * 60 * 1000;
+
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+        if (cached?.ts && (Date.now() - cached.ts < CACHE_TTL) && cached.url) {
+          return cached.url;
+        }
+      } catch {}
+
+      try {
+        const res = await fetch(`/api/get-telegram?agency=${encodeURIComponent(agencyId)}`, { cache: "no-store" });
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        const url = data?.telegram_url;
+
+        const valid = typeof url === "string" && url.startsWith("https://t.me/");
+        if (!valid) return null;
+
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), url }));
+        } catch {}
+
+        return url;
+      } catch {
+        return null;
+      }
+    }
+
+    (async () => {
+      TELEGRAM_URL = await loadTelegramUrlForAgency(AGENCY_ID);
+
+      // Setea href del botón Telegram
+      const btnTelegram = document.getElementById("btnTelegram");
+      if (btnTelegram) {
+        if (TELEGRAM_URL) {
+          btnTelegram.href = TELEGRAM_URL;
+          btnTelegram.dataset.enabled = "1";
+        } else {
+          btnTelegram.href = "#";
+          btnTelegram.dataset.enabled = "0";
+        }
+      }
+    })();
+
+    // Intercepta click si no hay Telegram para esa agency
+    document.addEventListener("click", (e) => {
+      const a = e.target?.closest?.('a[data-telegram="1"]');
+      if (!a) return;
+
+      if (!TELEGRAM_URL) {
+        e.preventDefault();
+        e.stopPropagation();
+        alert("❌ Telegram no disponible para esta agencia por el momento.");
+      }
+    });
 
     /***************************************************
      * LÓGICA WHATSAPP (GENÉRICA)
@@ -260,19 +329,6 @@
         const chosen = pickWeightedRandom(activeList);
         const mensaje = "¡Hola! Me pasás mi usuario 🚀";
         location.href = buildWaUrl(chosen.phone, mensaje);
-      });
-    }
-
-    /***************************************************
-     * LÓGICA TELEGRAM “NO DISPONIBLE”
-     ***************************************************/
-    const btnTelegram = document.getElementById("btnTelegram");
-    if (btnTelegram) {
-      btnTelegram.addEventListener("click", (e) => {
-        if (!TELEGRAM_URL) {
-          e.preventDefault();
-          alert("❌ No disponible por el momento.");
-        }
       });
     }
   </script>
