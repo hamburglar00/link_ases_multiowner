@@ -9,6 +9,7 @@ const TELEGRAM_BY_AGENCY = {
   "8":  "https://t.me/dianawin01bot?start=hola",
   "17": "https://t.me/Geraldina_bot?start=hola",
   "23": "https://t.me/TotiLolaBot?start=hola",
+  "28": "https://t.me/cetiasesBot?start=hola"
 };
 
 export default async function handler(req, res) {
